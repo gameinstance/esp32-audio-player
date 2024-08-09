@@ -1,0 +1,4 @@
+[mapping:libstream_buffer]
+archive: libstream_buffer.a
+entries:
+	* (noflash)

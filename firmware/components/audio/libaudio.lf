@@ -1,0 +1,4 @@
+[mapping:libaudio]
+archive: libaudio.a
+entries:
+	* (noflash)

@@ -1,0 +1,4 @@
+[mapping:libstream]
+archive: libstream.a
+entries:
+	* (noflash)

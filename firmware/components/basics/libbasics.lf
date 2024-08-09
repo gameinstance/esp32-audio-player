@@ -1,0 +1,4 @@
+[mapping:libbasics]
+archive: libbasics.a
+entries:
+	* (noflash)
