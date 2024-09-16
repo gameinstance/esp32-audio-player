@@ -134,7 +134,7 @@ public:
 		  _context{.buffer{stream_buffer}, .gpio{_gpio}, .play_cnt{player_oversampling}, .stereo_sample{}},
 		  _gptimer{nullptr}
 	{
-		printf("%s: Starting timer @ %zu samples/second\n", _tag, sample_rate);
+// 		printf("%s: Starting timer @ %zu samples/second\n", _tag, sample_rate);
 		gptimer_config_t timer_config = {
 			.clk_src = GPTIMER_CLK_SRC_DEFAULT,
 			.direction = GPTIMER_COUNT_UP,
@@ -143,17 +143,17 @@ public:
 			.flags{}
 		};
 		ESP_ERROR_CHECK(gptimer_new_timer(&timer_config, &_gptimer));
-		printf("%s: Timer created", _tag);
+// 		printf("%s: Timer created\n", _tag);
 
 		gptimer_event_callbacks_t cbs = {
 			.on_alarm = &stereo_player<BUFFER>::play_data,
 		};
 		ESP_ERROR_CHECK(gptimer_register_event_callbacks(_gptimer, &cbs, &_context));
 
-		printf("%s: Enable timer", _tag);
+// 		printf("%s: Enable timer\n", _tag);
 		ESP_ERROR_CHECK(gptimer_enable(_gptimer));
 
-		printf("%s: Start timer", _tag);
+// 		printf("%s: Start timer\n", _tag);
 		gptimer_alarm_config_t alarm_config = {
 			.alarm_count = (uint64_t)(_timer_resolution_hz * frequency_calibration / (sample_rate * player_oversampling)),
 			.reload_count = 0,
@@ -163,6 +163,7 @@ public:
 		};
 		ESP_ERROR_CHECK(gptimer_set_alarm_action(_gptimer, &alarm_config));
 		ESP_ERROR_CHECK(gptimer_start(_gptimer));
+		printf("%s: Started timer @ %zu samples/second\n", _tag, sample_rate);
 	}
 	~stereo_player()
 	{

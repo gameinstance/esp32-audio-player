@@ -173,12 +173,10 @@ void prepare_next_track()
 	if (play_mode == play_mode_type::once) {
 		state = state_type::ready;
 	} else if (play_mode == play_mode_type::loop) {
-		state = state_type::play;
+		// play_path remains unchanged
 	} else /*if (play_mode == play_mode_type::album)*/ {
 		try {
 			play_path = get_next_album_track();
-
-			state = state_type::play;
 
 			vTaskDelay(1000 / portTICK_PERIOD_MS);
 		} catch (basics::error& e) {
@@ -214,68 +212,71 @@ void play_track()
 	std::cout << "player: sample rshifting by " << sample_rshift << " bits\n";
 
 	player_buffer.reset();
-	pcm56_player_type player{player_config, player_buffer, info.sample_rate, frequency_calibration};
 
-	auto have_block = false;
-	for (;;) {
-		if (cmd == cmd_type::stop) {
-			cmd = cmd_type::idle;
-			state = state_type::ready;
-			std::cout << "player: cmd=stop" << std::endl;
+	{
+		pcm56_player_type player{player_config, player_buffer, info.sample_rate, frequency_calibration};
 
-			break;
-		}
+		auto have_block = false;
+		for (;;) {
+			if (cmd == cmd_type::stop) {
+				cmd = cmd_type::idle;
+				state = state_type::ready;
+				std::cout << "player: cmd=stop" << std::endl;
 
-		if (cmd == cmd_type::play) {
-			cmd = cmd_type::idle;
-			state = state_type::play;
-			std::cout << "player: cmd=play" << std::endl;
+				break;
+			}
 
-			break;
-		}
+			if (cmd == cmd_type::play) {
+				cmd = cmd_type::idle;
+				state = state_type::play;
+				std::cout << "player: cmd=play" << std::endl;
 
-		if (!have_block) {
-			flac_decoder.decode_audio();
-			have_block = true;
+				break;
+			}
 
-			continue;
-		}
+			if (!have_block) {
+				flac_decoder.decode_audio();
+				have_block = true;
 
-		// have_block
-		if (!player_buffer.need_data()) {
+				continue;
+			}
+
+			// have_block
+			if (!player_buffer.need_data()) {
+				taskYIELD();
+
+				continue;
+			}
+
+			int rshift = sample_rshift - volume;
+
+			if (rshift == 0) {
+				for (auto i = size_t{0}; i < flac_decoder.block_size(); ++i)
+					player_buffer.template put<task_operation>(stereo_sample_type{
+						(player_sample_type)flac_decoder.block_data()[0][i],
+										(player_sample_type)flac_decoder.block_data()[1][i]});
+			} else if (rshift >= 0) {
+				for (auto i = size_t{0}; i < flac_decoder.block_size(); ++i)
+					player_buffer.template put<task_operation>(stereo_sample_type{
+						(player_sample_type)(flac_decoder.block_data()[0][i] >> rshift),
+										(player_sample_type)(flac_decoder.block_data()[1][i] >> rshift)});
+			} else { // (rshift < 0)
+				for (auto i = size_t{0}; i < flac_decoder.block_size(); ++i)
+					player_buffer.template put<task_operation>(stereo_sample_type{
+						(player_sample_type)(flac_decoder.block_data()[0][i] << -rshift),
+										(player_sample_type)(flac_decoder.block_data()[1][i] << -rshift)});
+			}
+			have_block = false;
+
+			if (flac_decoder.state() == audio::flac::decoder_state::complete)
+				break;
+
 			taskYIELD();
-
-			continue;
 		}
-
-		int rshift = sample_rshift - volume;
-
-		if (rshift == 0) {
-			for (auto i = size_t{0}; i < flac_decoder.block_size(); ++i)
-				player_buffer.template put<task_operation>(stereo_sample_type{
-					(player_sample_type)flac_decoder.block_data()[0][i],
-									(player_sample_type)flac_decoder.block_data()[1][i]});
-		} else if (rshift >= 0) {
-			for (auto i = size_t{0}; i < flac_decoder.block_size(); ++i)
-				player_buffer.template put<task_operation>(stereo_sample_type{
-					(player_sample_type)(flac_decoder.block_data()[0][i] >> rshift),
-									(player_sample_type)(flac_decoder.block_data()[1][i] >> rshift)});
-		} else { // (rshift < 0)
-			for (auto i = size_t{0}; i < flac_decoder.block_size(); ++i)
-				player_buffer.template put<task_operation>(stereo_sample_type{
-					(player_sample_type)(flac_decoder.block_data()[0][i] << -rshift),
-									(player_sample_type)(flac_decoder.block_data()[1][i] << -rshift)});
-		}
-		have_block = false;
-
-		if (flac_decoder.state() == audio::flac::decoder_state::complete) {
-			prepare_next_track();
-
-			break;
-		}
-
-		taskYIELD();
 	}
+
+	if ((state == state_type::play) && (flac_decoder.state() == audio::flac::decoder_state::complete))
+		prepare_next_track();
 }
 
 
@@ -295,7 +296,7 @@ httpd_uri_t list_handler = {
 		try {
 			std::string dir_path = std::string{req->uri}.substr(6);  // HACK: parse params properly
 			dir_path = basics::base64::decode(dir_path.c_str(), dir_path.size());
-			std::cout << "GET /list " << req->uri << "; dir=" << dir_path << std::endl;
+			std::cout << "http_ui: GET /list " << req->uri << "; dir=" << dir_path << std::endl;
 
 			if (!card_detect.card_present())
 				throw basics::error{"sd_card: no card present"};
@@ -344,7 +345,7 @@ httpd_uri_t play_handler = {
 		try {
 			play_path = std::string{req->uri}.substr(6);  // TODO: create a param parser
 			play_path = basics::base64::decode(play_path.c_str(), play_path.size());
-			std::cout << "GET " << req->uri << "; file=" << play_path << std::endl;
+			std::cout << "http_ui: GET " << req->uri << "; file=" << play_path << std::endl;
 
 			if (!card_detect.card_present())
 				return httpd_resp_send(req, "[error: no card]", HTTPD_RESP_USE_STRLEN);
@@ -388,7 +389,7 @@ httpd_uri_t stop_handler = {
 	.handler = [] (httpd_req_t *req) -> esp_err_t {
 		cmd = cmd_type::stop;
 
-		std::cout << "GET " << req->uri << std::endl;
+		std::cout << "http_ui: GET " << req->uri << std::endl;
 		return httpd_resp_send(req, "stop", HTTPD_RESP_USE_STRLEN);
 	},
 	.user_ctx = nullptr
@@ -411,7 +412,7 @@ httpd_uri_t volume_handler = {
 		std::stringstream ostream{};
 		ostream << "{\"volume\":" << volume << "}";
 
-		std::cout << "GET " << req->uri << " " << ostream.str() << std::endl;
+		std::cout << "http_ui: GET " << req->uri << " " << ostream.str() << std::endl;
 		return httpd_resp_sendstr(req, ostream.str().c_str());
 	},
 	.user_ctx = nullptr
@@ -436,7 +437,7 @@ httpd_uri_t mode_handler = {
 		std::stringstream ostream{};
 		ostream << "{\"mode\":\"" << mode << "\"}";
 
-		std::cout << "GET " << req->uri << " " << ostream.str() << std::endl;
+		std::cout << "http_ui: GET " << req->uri << " " << ostream.str() << std::endl;
 		return httpd_resp_sendstr(req, ostream.str().c_str());
 	},
 	.user_ctx = nullptr
@@ -458,7 +459,7 @@ httpd_uri_t state_handler = {
 									 (play_mode == play_mode_type::loop)? "loop" : "album") << "\","
 				<< "\"volume\":" << volume << "}";
 
-		std::cout << "GET " << req->uri << " : " << ostream.str() << std::endl;
+		std::cout << "http_ui: GET " << req->uri << " : " << ostream.str() << std::endl;
 		return httpd_resp_sendstr(req, ostream.str().c_str());
 	},
 	.user_ctx = nullptr
