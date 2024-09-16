@@ -4,5 +4,4 @@
 
 An ESP32 audio player powered by PCM56 DAC chips.
 
-
-## Hardware details coming soon.
+![ESP32 DAC56 player implementation for Technics ST-S505](esp32_pcm56_st-s505/img/esp32_pcm56_st-s505_dac_board_top.png)
