@@ -40,7 +40,7 @@ class relays_output {
 public:
 	using config_type = relays_output_config;
 
-	relays_output(config_type &config)
+	explicit relays_output(config_type &config)
 		: _config{config}, _bitmask{1ull << _config.source_gpio | 1ull << _config.power_gpio}
 	{
 		gpio_config_t gpio_conf{};
@@ -51,6 +51,12 @@ public:
 		gpio_conf.pull_up_en = GPIO_PULLUP_DISABLE;
 		gpio_config(&gpio_conf);
 	}
+	relays_output(const relays_output&) = delete;
+	relays_output(relays_output&& other) = delete;
+
+	relays_output& operator=(const relays_output&) = delete;
+	relays_output& operator=(relays_output&& other) = delete;
+
 	~relays_output()
 	{
 		gpio_reset_pin((gpio_num_t)_config.source_gpio);
@@ -79,7 +85,7 @@ class card_detect_input {
 public:
 	using config_type = card_detect_input_config;
 
-	card_detect_input(config_type &config)
+	explicit card_detect_input(config_type &config)
 		: _config{config}, _bitmask{1ull << _config.gpio}
 	{
 		gpio_config_t gpio_conf{};
@@ -90,6 +96,11 @@ public:
 		gpio_conf.pull_up_en = GPIO_PULLUP_ENABLE;
 		gpio_config(&gpio_conf);
 	}
+	card_detect_input(const card_detect_input&) = delete;
+	card_detect_input(card_detect_input&& other) = delete;
+
+	card_detect_input& operator=(const card_detect_input&) = delete;
+	card_detect_input& operator=(card_detect_input&& other) = delete;
 
 	~card_detect_input()
 	{
