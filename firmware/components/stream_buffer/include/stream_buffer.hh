@@ -60,6 +60,9 @@ template<typename VALUE_TYPE, size_t MAX_SIZE>
 class stream_buffer {
 public:
 	stream_buffer();
+	stream_buffer(const stream_buffer&) = delete;
+
+	stream_buffer& operator=(const stream_buffer&) = delete;
 
 	void reset();
 

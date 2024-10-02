@@ -41,7 +41,7 @@ struct stereo_player_config {
 
 class dac_gpio {
 public:
-	dac_gpio(const stereo_player_config &config)
+	explicit dac_gpio(const stereo_player_config &config)
 		: _config{config},
 		  _clk_bitmask{1ul << _config.clk_gpio},
 		  _ch1_data_bitmask{1ul << _config.ch1_data_gpio},
@@ -61,6 +61,12 @@ public:
 		pcm_gpio_conf.pull_up_en = GPIO_PULLUP_DISABLE;
 		gpio_config(&pcm_gpio_conf);
 	}
+	dac_gpio(const dac_gpio&) = delete;
+	dac_gpio(dac_gpio&& other) = delete;
+
+	dac_gpio& operator=(const dac_gpio&) = delete;
+	dac_gpio& operator=(dac_gpio&& other) = delete;
+
 	~dac_gpio() {
 		gpio_reset_pin((gpio_num_t)_config.clk_gpio);
 		gpio_reset_pin((gpio_num_t)_config.ch1_data_gpio);
@@ -165,6 +171,12 @@ public:
 		ESP_ERROR_CHECK(gptimer_start(_gptimer));
 		printf("%s: Started timer @ %zu samples/second\n", _tag, sample_rate);
 	}
+	stereo_player(const stereo_player&) = delete;
+	stereo_player(stereo_player&& other) = delete;
+
+	stereo_player& operator=(const stereo_player&) = delete;
+	stereo_player& operator=(stereo_player&& other) = delete;
+
 	~stereo_player()
 	{
 		ESP_ERROR_CHECK(gptimer_stop(_gptimer));
